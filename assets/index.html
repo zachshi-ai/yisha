@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0c10">
+<title>一沙</title>
+<style>
+  :root{
+    --accent:#e8b06a;
+    --accent-dim:rgba(232,176,106,.34);
+    --ink:#e9e3d6;
+    --ink-dim:#8d8676;
+    --bg:#0a0c10;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"Noto Sans CJK SC","Source Han Sans SC","PingFang SC",sans-serif;
+    -webkit-user-select:none;user-select:none;}
+  #cv{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+
+  /* 暗角 + 扫描线，给点阵画面一层胶片质感 */
+  .vignette{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 45%,rgba(0,0,0,0) 38%,rgba(0,0,0,.55) 78%,rgba(0,0,0,.82) 100%);}
+  .scan{position:fixed;inset:0;pointer-events:none;opacity:.22;
+    background:repeating-linear-gradient(to bottom,rgba(255,255,255,.055) 0px,rgba(255,255,255,.055) 1px,rgba(0,0,0,0) 1px,rgba(0,0,0,0) 3px);}
+
+  .hud{position:fixed;left:0;right:0;pointer-events:none;font-size:12px;letter-spacing:.08em;}
+  .scrim{position:fixed;left:0;right:0;pointer-events:none;z-index:5;}
+  .scrim.t{top:0;height:150px;background:linear-gradient(to bottom,rgba(6,8,11,.88),rgba(6,8,11,.42) 55%,rgba(6,8,11,0));}
+  .scrim.b{bottom:0;height:170px;background:linear-gradient(to top,rgba(6,8,11,.92),rgba(6,8,11,.40) 55%,rgba(6,8,11,0));}
+
+  /* 顶部 */
+  #top{top:0;padding:calc(env(safe-area-inset-top,0px) + 14px) 16px 0;display:flex;justify-content:space-between;align-items:flex-start;}
+  #worldName{font-size:17px;letter-spacing:.22em;font-weight:500;color:var(--ink);text-shadow:0 0 18px var(--accent-dim);}
+  #seedLine{margin-top:5px;font-size:11px;color:var(--ink-dim);letter-spacing:.1em;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #coord{font-size:11px;color:var(--ink-dim);letter-spacing:.12em;text-align:right;line-height:1.7;font-variant-numeric:tabular-nums;}
+  #coord b{color:var(--accent);font-weight:500;}
+
+  /* 底部 */
+  #bottom{bottom:0;padding:0 16px calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;flex-direction:column;gap:10px;align-items:center;}
+  #hint{font-size:11px;text-shadow:0 1px 8px rgba(0,0,0,.9);color:var(--ink-dim);letter-spacing:.16em;opacity:.8;transition:opacity .6s;}
+  #bar{display:flex;gap:10px;pointer-events:auto;}
+  .btn{pointer-events:auto;padding:9px 18px;border:1px solid rgba(233,227,214,.16);border-radius:999px;
+    background:rgba(14,17,22,.66);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    color:var(--ink);font-size:12.5px;letter-spacing:.14em;font-family:inherit;transition:border-color .25s,transform .12s;}
+  .btn:active{transform:scale(.96);border-color:var(--accent-dim);}
+  .btn.accent{color:var(--accent);border-color:var(--accent-dim);}
+
+  /* 面板 */
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;transform:translateY(101%);transition:transform .42s cubic-bezier(.22,.9,.24,1);
+    background:linear-gradient(to bottom,rgba(16,19,25,.96),rgba(10,12,16,.99));
+    border-top:1px solid rgba(233,227,214,.12);border-radius:22px 22px 0 0;
+    max-height:74vh;display:flex;flex-direction:column;
+    padding:14px 20px calc(env(safe-area-inset-bottom,0px) + 22px);}
+  .sheet.open{transform:translateY(0);}
+  .grab{width:36px;height:3px;border-radius:2px;background:rgba(233,227,214,.22);margin:0 auto 12px;flex:none;}
+  .sheetTitle{font-size:13px;letter-spacing:.24em;color:var(--accent);margin-bottom:12px;flex:none;}
+  .sheetBody{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .chronicle{font-size:12.5px;line-height:2.05;color:#c9c2b2;letter-spacing:.05em;border-left:2px solid var(--accent-dim);padding-left:12px;margin-bottom:18px;}
+  .poi{display:flex;gap:10px;align-items:baseline;padding:9px 0;border-bottom:1px dashed rgba(233,227,214,.09);}
+  .poi .g{font-size:11px;color:var(--accent);letter-spacing:.1em;width:52px;flex:none;opacity:.9;}
+  .poi .n{font-size:13px;letter-spacing:.12em;color:var(--ink);}
+  .poi .l{font-size:11px;color:var(--ink-dim);line-height:1.7;margin-top:3px;letter-spacing:.03em;}
+  .poi.locked .n{color:rgba(141,134,118,.65);}
+  .empty{font-size:12px;color:var(--ink-dim);line-height:2;letter-spacing:.06em;}
+
+  input.seedInput{width:100%;padding:13px 15px;border-radius:14px;border:1px solid rgba(233,227,214,.16);
+    background:rgba(255,255,255,.04);color:var(--ink);font-size:14px;letter-spacing:.08em;font-family:inherit;outline:none;}
+  input.seedInput::placeholder{color:rgba(141,134,118,.7);}
+  .row{display:flex;gap:10px;margin-top:12px;}
+  .list{margin-top:20px;}
+  .listTitle{font-size:10.5px;letter-spacing:.2em;color:var(--ink-dim);margin-bottom:8px;}
+  .wrow{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px dashed rgba(233,227,214,.09);}
+  .wrow .wn{font-size:13px;letter-spacing:.14em;}
+  .wrow .ws{font-size:10.5px;color:var(--ink-dim);margin-top:3px;letter-spacing:.05em;max-width:62vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wrow .wc{font-size:10.5px;color:var(--accent);letter-spacing:.08em;flex:none;}
+
+  /* 发现提示 */
+  #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.94);z-index:30;
+    opacity:0;pointer-events:none;transition:opacity .5s,transform .5s;
+    padding:16px 26px;border-radius:14px;text-align:center;
+    background:rgba(12,15,20,.86);border:1px solid var(--accent-dim);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
+  #toast.on{opacity:1;transform:translate(-50%,-50%) scale(1);}
+  #toast .t1{font-size:10px;letter-spacing:.34em;color:var(--accent);}
+  #toast .t2{font-size:17px;letter-spacing:.24em;margin-top:8px;}
+  #toast .t3{font-size:11px;color:var(--ink-dim);margin-top:8px;letter-spacing:.05em;max-width:64vw;line-height:1.7;}
+
+  /* 开场 */
+  #intro{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;transition:opacity .9s;}
+  #intro.gone{opacity:0;pointer-events:none;}
+  #intro .mark{font-size:44px;letter-spacing:.5em;padding-left:.5em;color:var(--ink);font-weight:200;text-shadow:0 0 40px var(--accent-dim);}
+  #intro .sub{font-size:10.5px;letter-spacing:.4em;color:var(--ink-dim);padding-left:.4em;}
+  #intro .line{width:1px;height:56px;background:linear-gradient(to bottom,transparent,var(--accent-dim),transparent);animation:breathe 2.6s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{opacity:.25}50%{opacity:.9}}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div class="scan"></div>
+<div class="vignette"></div>
+
+<div class="scrim t"></div>
+<div class="scrim b"></div>
+<div class="hud" id="top">
+  <div>
+    <div id="worldName">一沙</div>
+    <div id="seedLine">尚未成陆</div>
+  </div>
+  <div id="coord"><b id="poiCount">0 / 0</b><br><span id="coordText">— —</span></div>
+</div>
+
+<div class="hud" id="bottom">
+  <div id="hint">拖动行走 · 轻点查看 · 靠近遗迹会记入见闻</div>
+  <div id="bar">
+    <button class="btn" id="btnZoom">俯瞰</button>
+    <button class="btn" id="btnBook">见闻录</button>
+    <button class="btn accent" id="btnNew">新世界</button>
+  </div>
+</div>
+
+<div class="sheet" id="book">
+  <div class="grab"></div>
+  <div class="sheetTitle">见 闻 录</div>
+  <div class="sheetBody">
+    <div class="chronicle" id="chronicle"></div>
+    <div id="poiList"></div>
+  </div>
+</div>
+
+<div class="sheet" id="maker">
+  <div class="grab"></div>
+  <div class="sheetTitle">造 一 片 陆</div>
+  <div class="sheetBody">
+    <input class="seedInput" id="seedInput" placeholder="写一句话，它会长成一片陆地" maxlength="40">
+    <div class="row">
+      <button class="btn accent" id="btnGen" style="flex:1">生成</button>
+      <button class="btn" id="btnRandom">随缘</button>
+    </div>
+    <div class="list">
+      <div class="listTitle">保 存 的 世 界</div>
+      <div id="worldList"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"><div class="t1">已 记 入</div><div class="t2" id="toastName"></div><div class="t3" id="toastLore"></div></div>
+
+<div id="intro">
+  <div class="mark">一沙</div>
+  <div class="line"></div>
+  <div class="sub">一 沙 一 世 界</div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   一沙 · 世界引擎
+   一句话 → 确定性生成一片陆地：地形、生态、遗迹、编年史
+   全部本地运算，不联网
+   ============================================================ */
+
+const W = 132, H = 132, PITCH = 8;     // 世界尺寸（方格）与点阵间距
+const MAP_PX = W * PITCH;
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const mapCv = document.createElement('canvas');
+mapCv.width = MAP_PX; mapCv.height = MAP_PX;
+const mctx = mapCv.getContext('2d');
+
+/* ---------- 随机与噪声 ---------- */
+function hashStr(s){
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const smooth = t => t * t * (3 - 2 * t);
+
+function makeField(rand, freq){
+  const g = freq + 1;
+  const grid = new Float32Array(g * g);
+  for (let i = 0; i < grid.length; i++) grid[i] = rand();
+  return function(x, y){
+    const fx = Math.min(x * freq, freq - 1e-6), fy = Math.min(y * freq, freq - 1e-6);
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = smooth(fx - x0), ty = smooth(fy - y0);
+    const i00 = y0 * g + x0, i10 = i00 + 1, i01 = i00 + g, i11 = i01 + 1;
+    const a = grid[i00] + (grid[i10] - grid[i00]) * tx;
+    const b = grid[i01] + (grid[i11] - grid[i01]) * tx;
+    return a + (b - a) * ty;
+  };
+}
+function fbm(rand, x, y, baseFreq, octaves){
+  let sum = 0, amp = 1, norm = 0, freq = baseFreq;
+  for (let o = 0; o < octaves; o++){
+    sum += makeField(rand, freq)(x, y) * amp;   // 每层独立网格
+    norm += amp; amp *= 0.5; freq *= 2;
+  }
+  return sum / norm;
+}
+
+/* ---------- 词库：名字与编年史 ---------- */
+const CH_A = ['青','玄','落','浮','孤','长','白','赤','暮','初','寒','野','苍','远','微','空','枯','迟','霜','芜','临','沉'];
+const CH_B = ['屿','洲','野','原','川','谷','泽','丘','滩','湾','陵','岬','汀','墟','垠','滨'];
+const FORMER = ['初霜','长夏','灰潮','无月','太息','落星','静海','空弦','千夜','晚照','白蜡','哑钟'];
+const WINDS  = ['咸风','铁风','暖风','空风','迟风','南风','沙风'];
+const DIRECT = ['东海','西山','南岸','北原','云上','地底','远礁'];
+const ACTS   = ['说话','迁徙','沉没','发芽','熄灭','醒来','争吵','祈祷','学会用火','把名字刻在石上'];
+const WHO    = ['无名的旅人','最后的守塔人','一群孩子','抄经者','牧羊人','断了桨的水手','戴铃铛的妇人'];
+const WHERE  = ['井边','塔下','沙丘背面','渡口','洞口','半塌的墙根','苇丛深处'];
+const ENDS   = ['此后无人再提起它的名字','它只在夜里被听见','那句话后来成了一句咒语','一切都被写进沙里','它成了后来者的路标','陆地记住了，人忘了'];
+const MATTER = ['潮水','麦子','石头','萤火','铃','船','盐','绳结','影子'];
+
+const POI_KIND = [
+  {id:'stele', glyph:'碑', tpl:a => a + '碑', weight:3},
+  {id:'village', glyph:'村', tpl:a => a + '村', weight:3},
+  {id:'tower', glyph:'塔', tpl:a => '望' + a + '塔', weight:2},
+  {id:'well', glyph:'井', tpl:a => a + '井', weight:2},
+  {id:'gate', glyph:'门', tpl:a => a + '门', weight:2},
+  {id:'altar', glyph:'坛', tpl:a => a + '坛', weight:2},
+  {id:'ruin', glyph:'墟', tpl:a => a + '墟', weight:2}
+];
+
+const ACCENTS = ['#e8b06a', '#6fd8d0', '#c9a0ff', '#8fd48a', '#f09a9a', '#9ec4ff', '#e6d267', '#ffb3c9'];
+
+function pick(rand, arr){ return arr[Math.floor(rand() * arr.length)]; }
+function pickW(rand, arr){
+  let total = 0; for (const it of arr) total += it.weight || 1;
+  let r = rand() * total;
+  for (const it of arr){ r -= (it.weight || 1); if (r <= 0) return it; }
+  return arr[arr.length - 1];
+}
+
+/* ---------- 生成一个世界 ---------- */
+function buildWorld(seedText){
+  const seed = hashStr(seedText);
+  const rand = mulberry32(seed);
+  const accent = ACCENTS[Math.floor(rand() * ACCENTS.length)];
+
+  // 三套噪声：高度、湿度、细节
+  const rH = mulberry32(seed ^ 0x9e3779b9);
+  const rM = mulberry32((seed * 31) >>> 0);
+  const rD = mulberry32((seed ^ 0x5bf03635) >>> 0);
+
+  const fH = [makeField(rH, 4), makeField(rH, 8), makeField(rH, 16), makeField(rH, 30)];
+  const fM = [makeField(rM, 5), makeField(rM, 11)];
+  const warp = makeField(mulberry32(seed ^ 0xabcde), 6);
+  const nD = makeField(rD, 26);
+  const fbmAt = (fs, x, y) => { let s = 0, a = 1, n = 0; for (const f of fs){ s += f(x, y) * a; n += a; a *= 0.5; } return s / n; };
+
+  const height = new Float32Array(W * H);
+  const moist  = new Float32Array(W * H);
+  const biome  = new Uint8Array(W * H);
+  const raw    = new Float32Array(W * H);
+
+  // 原始高程：分形噪声 + 域扭曲 + 岛屿衰减
+  for (let y = 0; y < H; y++){
+    for (let x = 0; x < W; x++){
+      const u = x / W, v = y / H;
+      const wx = u + (warp(u, v) - 0.5) * 0.055;
+      const wy = v + (warp(v, u) - 0.5) * 0.055;
+      let h = fbmAt(fH, wx, wy) * 1.55 - 0.28;
+      const dx = (u - 0.5) * 2, dy = (v - 0.5) * 2;
+      const d = Math.sqrt(dx * dx * 1.04 + dy * dy) / 1.30;
+      h -= Math.pow(Math.max(0, d), 2.1) * 0.70;
+      h += nD(u, v) * 0.03;
+      raw[y * W + x] = h;
+      moist[y * W + x] = fbmAt(fM, u, v);
+    }
+  }
+
+  // 按分位归一：每个种子都得到比例稳定的海、滩、原、林、脊、雪
+  const sorted = Array.from(raw).sort((a, b) => a - b);
+  const rankOf = v => {
+    let lo = 0, hi = sorted.length - 1;
+    while (lo < hi){ const mid = (lo + hi) >> 1; if (sorted[mid] < v) lo = mid + 1; else hi = mid; }
+    return lo / (sorted.length - 1);
+  };
+  for (let i = 0; i < W * H; i++){
+    const r = rankOf(raw[i]);
+    height[i] = r;
+    const m = moist[i];
+    let b;
+    if (r < 0.205) b = 0;
+    else if (r < 0.395) b = 1;
+    else if (r < 0.452) b = 2;
+    else if (r < 0.625) b = (m < 0.40 ? 2 : 3);
+    else if (r < 0.795) b = (m < 0.44 ? 3 : 4);
+    else if (r < 0.944) b = 5;
+    else b = 6;
+    biome[i] = b;
+  }
+
+  const world = {
+    seedText, seed, accent, height, moist, biome,
+    poi: [], discovered: [], player: {x: W/2, y: H/2},
+    name: '', chronicle: '', zoom: 0.78, t: 0, particles: []
+  };
+
+  world.name = pick(rand, CH_A) + pick(rand, CH_B);
+
+  // 起点：找一块中心附近的可行走地
+  let best = null;
+  for (let r = 0; r < 30 && !best; r++){
+    for (let k = 0; k < 24; k++){
+      const x = Math.round(W/2 + (rand() - 0.5) * (10 + r * 2));
+      const y = Math.round(H/2 + (rand() - 0.5) * (10 + r * 2));
+      if (x < 2 || y < 2 || x >= W-2 || y >= H-2) continue;
+      const b = biome[y * W + x];
+      if (b >= 3 && b <= 4){ best = {x, y}; break; }
+    }
+  }
+  world.player = best || {x: W/2, y: H/2};
+
+  // 地标：撒点，互相之间至少隔一段距离
+  const N = 6 + Math.floor(rand() * 4);
+  const tried = [];
+  for (let i = 0; i < N; i++){
+    let placed = null;
+    for (let att = 0; att < 400; att++){
+      const x = 3 + Math.floor(rand() * (W - 6));
+      const y = 3 + Math.floor(rand() * (H - 6));
+      const b = biome[y * W + x];
+      if (b < 2 || b > 5) continue;
+      if (Math.hypot(x - world.player.x, y - world.player.y) < 7) continue;
+      if (tried.some(p => Math.hypot(p.x - x, p.y - y) < 11)) continue;
+      placed = {x, y}; break;
+    }
+    if (!placed) continue;
+    tried.push(placed);
+    const kind = pickW(rand, POI_KIND);
+    world.poi.push({
+      x: placed.x, y: placed.y,
+      id: kind.id, glyph: kind.glyph,
+      name: kind.tpl(pick(rand, CH_A) + pick(rand, CH_B)),
+      lore: pick(rand, WHO) + '曾在' + pick(rand, WHERE) + pick(rand, ACTS) + '，' + pick(rand, MATTER) + pick(rand, ['留了下来','不见了','变了颜色','被带走了']) + '。',
+      found: false
+    });
+  }
+
+  // 编年史
+  const former = pick(rand, FORMER), dir = pick(rand, DIRECT), wind = pick(rand, WINDS);
+  const who = pick(rand, WHO), where = pick(rand, WHERE), act = pick(rand, ACTS);
+  const end = pick(rand, ENDS), matter = pick(rand, MATTER), matter2 = pick(rand, MATTER);
+  world.chronicle = [
+    former + '，' + wind + '自' + dir + '而来，' + matter + '开始' + pick(rand, ['变轻','发亮','说话','往北走']) + '。',
+    who + '在' + where + act + '，把' + matter2 + '埋进了沙里。',
+    '后来' + world.name + '只剩下' + world.poi.length + '处还能辨认的地方，和一整片会呼吸的' + pick(rand, ['滩涂','林线','石场','苇荡']) + '。',
+    end + '。'
+  ].join('');
+
+  bakeMap(world);
+  spawnParticles(world);
+  return world;
+}
+
+/* ---------- 烘焙点阵地形 ---------- */
+const BIOME_COLOR = {
+  0: [15, 36, 49],    // 深海
+  1: [34, 92, 104],   // 浅滩
+  2: [214, 184, 122], // 砂
+  3: [126, 148, 92],  // 草
+  4: [60, 95, 71],    // 林
+  5: [126, 130, 136], // 岩
+  6: [226, 232, 233]  // 雪
+};
+
+function bakeMap(world){
+  mctx.clearRect(0, 0, MAP_PX, MAP_PX);
+  const {height, biome, accent, moist} = world;
+  const accentRGB = hexToRgb(accent);
+  const nD = makeField(mulberry32(world.seed ^ 0x77aa33), 26);
+  const isLand = b => b >= 2;
+  const at = (x, y) => biome[Math.max(0, Math.min(H-1, y)) * W + Math.max(0, Math.min(W-1, x))];
+
+  // 底色：深海的呼吸，不是死黑
+  const bg = mctx.createRadialGradient(MAP_PX/2, MAP_PX/2, MAP_PX*0.1, MAP_PX/2, MAP_PX/2, MAP_PX*0.78);
+  bg.addColorStop(0, 'rgb(13,28,38)');
+  bg.addColorStop(1, 'rgb(7,9,13)');
+  mctx.fillStyle = bg;
+  mctx.fillRect(0, 0, MAP_PX, MAP_PX);
+
+  for (let y = 0; y < H; y++){
+    for (let x = 0; x < W; x++){
+      const i = y * W + x, b = biome[i];
+      const c = BIOME_COLOR[b];
+      const h = height[i];
+      const speck = nD(x / W, y / H);
+      const jitter = ((Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1 + 1) % 1;
+
+      // 坡度光：左上受光
+      const hl = height[y * W + Math.max(0, x - 1)], hr = height[y * W + Math.min(W - 1, x + 1)];
+      const hu = height[Math.max(0, y - 1) * W + x], hd = height[Math.min(H - 1, y + 1) * W + x];
+      const slope = ((hl - hr) + (hu - hd)) * 2.6;
+
+      let light = isLand(b) ? (0.80 + (h - 0.55) * 0.85 + slope) : (0.86 + (0.4 - h) * 0.5 + slope * 0.5);
+
+      // 海岸线：临水的陆地提亮一圈，海则压暗，形成清晰界线
+      let foam = 0;
+      if (isLand(b)){
+        const near = !isLand(at(x-1,y)) || !isLand(at(x+1,y)) || !isLand(at(x,y-1)) || !isLand(at(x,y+1));
+        if (near){ foam = 0.55 + jitter * 0.35; }
+      }
+
+      light = Math.max(0.30, Math.min(1.52, light));
+
+      const drift = 0.94 + jitter * 0.12;
+      let r = c[0] * light * drift, g = c[1] * light * drift, bl = c[2] * light * drift;
+
+      // 深海留空做疏密，弱一点、蓝一点
+      if (b === 0){
+        if (jitter > 0.62) continue;
+        r = r * 0.9 + 6; g = g * 0.9 + 10; bl = bl * 0.9 + 16;
+        r += accentRGB[0] * 0.02; g += accentRGB[1] * 0.02; bl += accentRGB[2] * 0.02;
+      }
+      // 浅滩加一点水光
+      if (b === 1){
+        const sh = 1 + 0.22 * Math.sin(x * 0.6 + y * 0.9);
+        r += accentRGB[0] * 0.05 * sh; g += accentRGB[1] * 0.05 * sh; bl += accentRGB[2] * 0.05 * sh;
+      }
+      // 林线压暗，草甸提亮的斑块感
+      if (b === 4 && speck > 0.56){ r *= 0.72; g *= 0.78; bl *= 0.74; }
+      if (b === 3 && speck > 0.62){ r *= 1.10; g *= 1.06; bl *= 1.04; }
+      if (b === 2 && speck < 0.30){ r *= 0.90; g *= 0.90; bl *= 0.92; }
+      // 雪线与岩脊的高光
+      if ((b === 5 || b === 6) && jitter > 0.55){ light *= 1.12; r = c[0]*light; g = c[1]*light; bl = c[2]*light; }
+
+      const px = x * PITCH + PITCH / 2, py = y * PITCH + PITCH / 2;
+      // 半调：点径编码高程，低地小点、脊线大点，地形因此有起伏
+      const hNorm = Math.max(0, Math.min(1, (h - 0.40) / 0.58));
+      const rad = b <= 1
+          ? PITCH * (0.155 + jitter * 0.05)
+          : PITCH * (0.185 + hNorm * 0.26 + jitter * 0.07);
+
+      mctx.beginPath();
+      mctx.arc(px, py, rad, 0, 6.2832);
+      mctx.fillStyle = 'rgb(' + Math.min(255, r|0) + ',' + Math.min(255, g|0) + ',' + Math.min(255, bl|0) + ')';
+      mctx.fill();
+
+      // 浪花点
+      if (foam > 0){
+        mctx.beginPath();
+        mctx.arc(px + PITCH * 0.10, py + PITCH * 0.10, PITCH * 0.10 * (0.6 + jitter), 0, 6.2832);
+        mctx.fillStyle = 'rgba(236,246,248,' + (0.28 + jitter * 0.3).toFixed(2) + ')';
+        mctx.fill();
+      }
+
+      // 岩雪高光
+      if ((b === 5 || b === 6) && jitter > 0.62){
+        mctx.beginPath();
+        mctx.arc(px - PITCH * 0.07, py - PITCH * 0.07, rad * 0.40, 0, 6.2832);
+        mctx.fillStyle = 'rgba(255,255,255,.26)';
+        mctx.fill();
+      }
+    }
+  }
+
+  // 地标刻痕
+  for (const p of world.poi){
+    const px = p.x * PITCH + PITCH / 2, py = p.y * PITCH + PITCH / 2;
+    mctx.beginPath(); mctx.arc(px, py, PITCH * 0.50, 0, 6.2832);
+    mctx.fillStyle = 'rgba(8,10,14,.78)'; mctx.fill();
+    mctx.beginPath(); mctx.arc(px, py, PITCH * 0.13, 0, 6.2832);
+    mctx.fillStyle = accent; mctx.globalAlpha = .95; mctx.fill(); mctx.globalAlpha = 1;
+  }
+}
+
+function hexToRgb(h){
+  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+}
+
+function spawnParticles(world){
+  const rand = mulberry32(world.seed ^ 0x1234);
+  world.particles = [];
+  const n = 46;
+  for (let i = 0; i < n; i++){
+    world.particles.push({
+      x: rand() * W, y: rand() * H,
+      r: 0.5 + rand() * 1.1,
+      sp: 0.10 + rand() * 0.30,
+      ph: rand() * 6.28,
+      a: 0.18 + rand() * 0.5
+    });
+  }
+}
+
+/* ---------- 尺寸 ---------- */
+let DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+let VW = 0, VH = 0;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  VW = window.innerWidth; VH = window.innerHeight;
+  cv.width = Math.floor(VW * DPR);
+  cv.height = Math.floor(VH * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- 状态 ---------- */
+let world = null;
+let cam = {x: 0, y: 0};
+let keys = {};
+let stick = {active: false, ox: 0, oy: 0, x: 0, y: 0, id: null};
+let tapInfo = null, tapInfoT = 0;
+
+const WALKABLE = b => b >= 1;   // 只有深海不可走
+const SPEED = 9.5;              // 格/秒
+
+/* ---------- 输入 ---------- */
+cv.addEventListener('pointerdown', e => {
+  if (stick.id !== null) return;
+  stick.id = e.pointerId;
+  stick.active = true; stick.ox = e.clientX; stick.oy = e.clientY;
+  stick.x = e.clientX; stick.y = e.clientY;
+  stick.moved = 0; stick.t0 = performance.now();
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (e.pointerId !== stick.id) return;
+  stick.x = e.clientX; stick.y = e.clientY;
+  stick.moved = Math.max(stick.moved, Math.hypot(stick.x - stick.ox, stick.y - stick.oy));
+});
+function endPointer(e){
+  if (e.pointerId !== stick.id) return;
+  // 轻点 = 查看
+  if (stick.moved < 12 && performance.now() - stick.t0 < 320) inspectAt(stick.x, stick.y);
+  stick.id = null; stick.active = false;
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+function stickVector(){
+  if (!stick.active) return {x: 0, y: 0};
+  let dx = stick.x - stick.ox, dy = stick.y - stick.oy;
+  const len = Math.hypot(dx, dy);
+  if (len < 8) return {x: 0, y: 0};
+  const max = 52;
+  const k = Math.min(1, len / max);
+  return {x: dx / len * k, y: dy / len * k};
+}
+
+function keyVector(){
+  let x = 0, y = 0;
+  if (keys['a'] || keys['arrowleft']) x -= 1;
+  if (keys['d'] || keys['arrowright']) x += 1;
+  if (keys['w'] || keys['arrowup']) y -= 1;
+  if (keys['s'] || keys['arrowdown']) y += 1;
+  const l = Math.hypot(x, y);
+  return l > 0 ? {x: x / l, y: y / l} : {x: 0, y: 0};
+}
+
+function tileAtScreen(sx, sy){
+  const s = PITCH * (world ? world.zoom : 1);
+  const wx = (sx + cam.x) / s;
+  const wy = (sy + cam.y) / s;
+  return {x: Math.floor(wx), y: Math.floor(wy)};
+}
+
+function inspectAt(sx, sy){
+  if (!world) return;
+  const t = tileAtScreen(sx, sy);
+  if (t.x < 0 || t.y < 0 || t.x >= W || t.y >= H) return;
+  const b = world.biome[t.y * W + t.x];
+  const names = ['深海','浅滩','砂砾','草地','林线','岩脊','雪冠'];
+  tapInfo = {text: names[b], x: t.x, y: t.y};
+  tapInfoT = 2600;
+  const hint = document.getElementById('hint');
+  hint.textContent = names[b] + '　·　' + t.x + ', ' + t.y;
+  hint.style.opacity = '1';
+}
+
+/* ---------- 发现 ---------- */
+function checkDiscover(){
+  if (!world) return;
+  for (const p of world.poi){
+    if (p.found) continue;
+    if (Math.hypot(p.x - world.player.x, p.y - world.player.y) < 2.4){
+      p.found = true;
+      world.discovered.push(p.name);
+      showToast(p);
+      updateHUD();
+      renderBook();
+      saveWorlds();
+    }
+  }
+}
+
+let toastTimer = null;
+function showToast(p){
+  const el = document.getElementById('toast');
+  document.getElementById('toastName').textContent = p.name;
+  document.getElementById('toastLore').textContent = p.lore;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 3400);
+}
+
+function updateHUD(){
+  const found = world.poi.filter(p => p.found).length;
+  document.getElementById('poiCount').textContent = found + ' / ' + world.poi.length;
+  document.getElementById('coordText').textContent = Math.round(world.player.x) + ' · ' + Math.round(world.player.y);
+  document.getElementById('worldName').textContent = world.name;
+  document.getElementById('seedLine').textContent = '「' + world.seedText + '」';
+  document.documentElement.style.setProperty('--accent', world.accent);
+  document.documentElement.style.setProperty('--accent-dim', hexToRgba(world.accent, .34));
+}
+function hexToRgba(h, a){
+  const [r, g, b] = hexToRgb(h);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+/* ---------- 移动 ---------- */
+function step(dt){
+  if (!world) return;
+  let v = stickVector();
+  if (Math.hypot(v.x, v.y) < 0.06) v = keyVector();
+  if (Math.hypot(v.x, v.y) < 0.01) return;
+
+  const p = world.player;
+  const nx = p.x + v.x * SPEED * dt;
+  const ny = p.y + v.y * SPEED * dt;
+
+  if (canWalk(nx, p.y)) p.x = nx;
+  if (canWalk(p.x, ny)) p.y = ny;
+  p.x = Math.max(1, Math.min(W - 2, p.x));
+  p.y = Math.max(1, Math.min(H - 2, p.y));
+}
+function canWalk(x, y){
+  const tx = Math.floor(x), ty = Math.floor(y);
+  if (tx < 0 || ty < 0 || tx >= W || ty >= H) return false;
+  return WALKABLE(world.biome[ty * W + tx]);
+}
+
+/* ---------- 主循环 ---------- */
+let last = 0;
+function frame(now){
+  if (!last) last = now;
+  let dt = (now - last) / 1000; last = now;
+  dt = Math.min(dt, 0.05);
+  if (world){
+    world.t += dt;
+    step(dt);
+    checkDiscover();
+    render();
+  }
+  requestAnimationFrame(frame);
+}
+
+function render(){
+  const zoom = world.zoom;
+  const s = PITCH * zoom;
+  const viewW = VW / s, viewH = VH / s;
+
+  // 相机跟随并夹在陆地范围内
+  const cx = world.player.x, cy = world.player.y;
+  const halfW = viewW / 2, halfH = viewH / 2;
+  cam.x = (cx - halfW) * s;
+  cam.y = (cy - halfH) * s;
+  cam.x = Math.max(0, Math.min(MAP_PX - VW, cam.x));
+  cam.y = Math.max(0, Math.min(MAP_PX - VH, cam.y));
+  if (MAP_PX <= VW) cam.x = (MAP_PX - VW) / 2;
+  if (MAP_PX <= VH) cam.y = (MAP_PX - VH) / 2;
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#080a0e';
+  ctx.fillRect(0, 0, VW, VH);
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(mapCv, cam.x, cam.y, VW, VH, 0, 0, VW, VH);
+  ctx.imageSmoothingEnabled = true;
+
+  const toScreen = (wx, wy) => ({x: wx * s - cam.x, y: wy * s - cam.y});
+
+  // 光斑粒子
+  for (const q of world.particles){
+    const sx = q.x * s - cam.x, sy = q.y * s - cam.y;
+    if (sx < -20 || sy < -20 || sx > VW + 20 || sy > VH + 20) continue;
+    const pulse = 0.5 + 0.5 * Math.sin(world.t * q.sp * 6 + q.ph);
+    ctx.beginPath();
+    ctx.arc(sx, sy, q.r * zoom * (0.7 + pulse * 0.6), 0, 6.2832);
+    ctx.fillStyle = hexToRgba(world.accent, q.a * pulse * 0.9);
+    ctx.fill();
+  }
+
+  // 地标：未发现时只给一个极弱的呼吸圈
+  for (const p of world.poi){
+    const sp = toScreen(p.x + 0.5, p.y + 0.5);
+    if (sp.x < -60 || sp.y < -60 || sp.x > VW + 60 || sp.y > VH + 60) continue;
+    const d = Math.hypot(p.x - world.player.x, p.y - world.player.y);
+    const near = Math.max(0, 1 - d / 26);
+    if (p.found){
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 3.2 * zoom, 0, 6.2832);
+      ctx.strokeStyle = hexToRgba(world.accent, .55);
+      ctx.lineWidth = 1; ctx.stroke();
+    } else {
+      const pulse = 0.5 + 0.5 * Math.sin(world.t * 1.5 + p.x);
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, (7 + pulse * 5) * zoom, 0, 6.2832);
+      ctx.strokeStyle = hexToRgba(world.accent, 0.10 + near * 0.22);
+      ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+
+  // 玩家
+  const ps = toScreen(world.player.x, world.player.y);
+  const pulse = 0.5 + 0.5 * Math.sin(world.t * 2.6);
+  const grad = ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, 46 * zoom);
+  grad.addColorStop(0, hexToRgba(world.accent, .22 + pulse * .08));
+  grad.addColorStop(1, hexToRgba(world.accent, 0));
+  ctx.beginPath(); ctx.arc(ps.x, ps.y, 46 * zoom, 0, 6.2832);
+  ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(ps.x, ps.y, 4.2 * zoom, 0, 6.2832);
+  ctx.fillStyle = 'rgba(255,250,240,.95)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(ps.x, ps.y, (7 + pulse * 2) * zoom, 0, 6.2832);
+  ctx.strokeStyle = hexToRgba(world.accent, .5);
+  ctx.lineWidth = 1.2; ctx.stroke();
+
+  // 摇杆
+  if (stick.active){
+    ctx.beginPath(); ctx.arc(stick.ox, stick.oy, 44, 0, 6.2832);
+    ctx.strokeStyle = 'rgba(233,227,214,.14)'; ctx.lineWidth = 1; ctx.stroke();
+    const v = stickVector();
+    ctx.beginPath(); ctx.arc(stick.ox + v.x * 44, stick.oy + v.y * 44, 15, 0, 6.2832);
+    ctx.fillStyle = hexToRgba(world.accent, .30); ctx.fill();
+  }
+
+  document.getElementById('coordText').textContent =
+    Math.round(world.player.x) + ' · ' + Math.round(world.player.y);
+}
+
+/* ---------- 界面 ---------- */
+const book = document.getElementById('book');
+const maker = document.getElementById('maker');
+document.getElementById('btnBook').onclick = () => { maker.classList.remove('open'); book.classList.toggle('open'); renderBook(); };
+document.getElementById('btnNew').onclick = () => { book.classList.remove('open'); maker.classList.toggle('open'); renderWorlds(); };
+const btnZoom = document.getElementById('btnZoom');
+const ZOOM_NEAR = 1.05, ZOOM_FAR = 0.58;
+btnZoom.onclick = () => {
+  if (!world) return;
+  world.zoom = world.zoom > 0.8 ? ZOOM_FAR : ZOOM_NEAR;
+  btnZoom.textContent = world.zoom > 0.8 ? '俯瞰' : '近观';
+};
+[book, maker].forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+function renderBook(){
+  if (!world) return;
+  document.getElementById('chronicle').textContent = world.chronicle;
+  const box = document.getElementById('poiList');
+  box.innerHTML = '';
+  for (const p of world.poi){
+    const d = document.createElement('div');
+    d.className = 'poi' + (p.found ? '' : ' locked');
+    const dist = Math.round(Math.hypot(p.x - world.player.x, p.y - world.player.y));
+    d.innerHTML = '<div class="g">' + (p.found ? p.glyph : '？ ' + dist) + '</div>'
+      + '<div><div class="n">' + (p.found ? p.name : '未明之处') + '</div>'
+      + (p.found ? '<div class="l">' + p.lore + '</div>' : '') + '</div>';
+    box.appendChild(d);
+  }
+}
+
+function newWorldFrom(text){
+  const seedText = (text || '').trim() || ('无题·' + Math.floor(Math.random() * 99999));
+  world = buildWorld(seedText);
+  updateHUD();
+  renderBook();
+  saveWorlds();
+  book.classList.remove('open');
+  maker.classList.remove('open');
+  document.getElementById('btnZoom').textContent = '俯瞰';
+  document.getElementById('hint').textContent = '拖动行走 · 轻点查看 · 靠近遗迹会记入见闻';
+  document.getElementById('hint').style.opacity = '.8';
+  const intro = document.getElementById('intro');
+  if (intro && !intro.classList.contains('gone')) setTimeout(() => { intro.classList.add('gone'); setTimeout(() => intro.style.display = 'none', 1100); }, 500);
+}
+
+document.getElementById('btnGen').onclick = () => {
+  const inp = document.getElementById('seedInput');
+  newWorldFrom(inp.value);
+  inp.value = '';
+  inp.blur();
+};
+const RANDOM_SEEDS = ['把海折起来','今晚的风有铁味','第七次醒来','有人在这里等过','一整片没有名字的沙','铃铛在很远处响','把名字刻在石头上','潮水退到看不见'];
+document.getElementById('btnRandom').onclick = () => {
+  newWorldFrom(RANDOM_SEEDS[Math.floor(Math.random() * RANDOM_SEEDS.length)]);
+};
+
+/* ---------- 存档 ---------- */
+const KEY = 'sandverse.v1';
+function rawGet(){
+  try { if (window.NativeStore) return window.NativeStore.get(); } catch(e){}
+  try { return localStorage.getItem(KEY); } catch(e){ return null; }
+}
+function rawSet(str){
+  try { if (window.NativeStore) window.NativeStore.set(str); } catch(e){}
+  try { localStorage.setItem(KEY, str); } catch(e){}
+}
+function loadStore(){
+  try { return JSON.parse(rawGet() || '{}'); } catch(e){ return {}; }
+}
+function saveWorlds(){
+  if (!world) return;
+  const store = loadStore();
+  store[world.seedText] = {
+    seedText: world.seedText,
+    name: world.name,
+    discovered: world.poi.filter(p => p.found).map(p => p.name),
+    total: world.poi.length,
+    at: Date.now()
+  };
+  rawSet(JSON.stringify(store));
+}
+function renderWorlds(){
+  const store = loadStore();
+  const box = document.getElementById('worldList');
+  const items = Object.values(store).sort((a, b) => b.at - a.at).slice(0, 20);
+  if (!items.length){
+    box.innerHTML = '<div class="empty">还没有保存的陆地。写一句话，先造一片。</div>';
+    return;
+  }
+  box.innerHTML = '';
+  for (const it of items){
+    const d = document.createElement('div');
+    d.className = 'wrow';
+    d.innerHTML = '<div><div class="wn">' + it.name + '</div><div class="ws">' + it.seedText + '</div></div>'
+      + '<div class="wc">' + (it.discovered ? it.discovered.length : 0) + '/' + it.total + '</div>';
+    d.onclick = () => { newWorldFrom(it.seedText); };
+    box.appendChild(d);
+  }
+}
+
+/* ---------- 启动 ---------- */
+(function init(){
+  const store = loadStore();
+  const items = Object.values(store).sort((a, b) => b.at - a.at);
+  const first = items.length ? items[0].seedText : '一沙一世界';
+  world = buildWorld(first);
+  updateHUD();
+  renderBook();
+  renderWorlds();
+  requestAnimationFrame(frame);
+  setTimeout(() => { const el = document.getElementById('intro'); el.classList.add('gone'); setTimeout(() => el.style.display = 'none', 1100); }, 1500);
+})();
+</script>
+</body>
+</html>
